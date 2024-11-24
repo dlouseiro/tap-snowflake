@@ -151,10 +151,6 @@ class SnowflakeConnector(SQLConnector):
             params["private_key_file"] = config["private_key_path"]
             if config.get("private_key_passphrase"):
                 params["private_key_file_pwd"] = config["private_key_passphrase"]
-        elif self.auth_method == SnowflakeAuthMethod.KEY_PAIR and config.get(
-            "private_key",
-        ):
-            params["private_key"] = self.get_private_key()
 
         for option in ["database", "schema", "warehouse", "role"]:
             if config.get(option):
@@ -172,7 +168,9 @@ class SnowflakeConnector(SQLConnector):
             "client_request_mfa_token": True,
             "client_store_temporary_credential": True,
         }
-        if self.auth_method == SnowflakeAuthMethod.KEY_PAIR:
+        if self.auth_method == SnowflakeAuthMethod.KEY_PAIR and self.config.get(
+            "private_key",
+        ):
             connect_args["private_key"] = self.get_private_key()
         return sqlalchemy.create_engine(
             self.sqlalchemy_url,
