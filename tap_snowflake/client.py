@@ -149,6 +149,8 @@ class SnowflakeConnector(SQLConnector):
             "private_key_path",
         ):
             params["private_key_file"] = config["private_key_path"]
+            if config.get("private_key_passphrase"):
+                params["private_key_file_pwd"] = config["private_key_passphrase"]
         elif self.auth_method == SnowflakeAuthMethod.KEY_PAIR and config.get(
             "private_key",
         ):
