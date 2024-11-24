@@ -101,11 +101,7 @@ class SnowflakeConnector(SQLConnector):
         except KeyError:
             encoded_passphrase = None
 
-        if "private_key_path" in self.config:
-            with Path(self.config["private_key_path"]).open("rb") as key:
-                key_content = key.read()
-        else:
-            key_content = self.config["private_key"].encode()
+        key_content = self.config["private_key"].encode()
 
         p_key = serialization.load_pem_private_key(
             key_content,
@@ -149,6 +145,14 @@ class SnowflakeConnector(SQLConnector):
             params["authenticator"] = "externalbrowser"
         elif self.auth_method == SnowflakeAuthMethod.PASSWORD:
             params["password"] = config["password"]
+        elif self.auth_method == SnowflakeAuthMethod.KEY_PAIR and config.get(
+            "private_key_path",
+        ):
+            params["private_key_file"] = config["private_key_path"]
+        elif self.auth_method == SnowflakeAuthMethod.KEY_PAIR and config.get(
+            "private_key",
+        ):
+            params["private_key"] = self.get_private_key()
 
         for option in ["database", "schema", "warehouse", "role"]:
             if config.get(option):
