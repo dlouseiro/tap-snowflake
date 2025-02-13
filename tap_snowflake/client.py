@@ -164,8 +164,8 @@ class SnowflakeConnector(SQLConnector):
         Returns:
             A SQLAlchemy engine.
         """
-        import sys
         import contextlib
+        import sys
 
         connect_args: dict[str, Any] = {
             "client_request_mfa_token": True,
@@ -176,7 +176,8 @@ class SnowflakeConnector(SQLConnector):
         ):
             connect_args["private_key"] = self.get_private_key()
 
-        # Redirect stdout to stderr during engine creation to handle browser auth messages
+        # Redirect stdout to stderr during engine creation to
+        # handle browser auth messages
         with contextlib.redirect_stdout(sys.stderr):
             return sqlalchemy.create_engine(
                 self.sqlalchemy_url,
