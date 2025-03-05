@@ -164,9 +164,6 @@ class SnowflakeConnector(SQLConnector):
         Returns:
             A SQLAlchemy engine.
         """
-        import contextlib
-        import sys
-
         connect_args: dict[str, Any] = {
             "client_request_mfa_token": True,
             "client_store_temporary_credential": True,
@@ -176,15 +173,12 @@ class SnowflakeConnector(SQLConnector):
         ):
             connect_args["private_key"] = self.get_private_key()
 
-        # Redirect stdout to stderr during engine creation to
-        # handle browser auth messages
-        with contextlib.redirect_stdout(sys.stderr):
-            return sqlalchemy.create_engine(
-                self.sqlalchemy_url,
-                echo=False,
-                pool_timeout=10,
-                connect_args=connect_args,
-            )
+        return sqlalchemy.create_engine(
+            self.sqlalchemy_url,
+            echo=False,
+            pool_timeout=10,
+            connect_args=connect_args,
+        )
 
     # overridden to filter out the information_schema from catalog discovery
     def discover_catalog_entries(self) -> list[dict]:
@@ -302,6 +296,21 @@ class SnowflakeConnector(SQLConnector):
                 for col in profile_columns
             },
         )
+
+    def _connect(self) -> Connection:
+        """Override parent method to redirect stdout to stderr during connection.
+        
+        This is needed because Snowflake outputs browser auth messages to stdout
+        during connection establishment.
+        
+        Returns:
+            A SQLAlchemy connection.
+        """
+        import contextlib
+        import sys
+        
+        with contextlib.redirect_stdout(sys.stderr):
+            return super()._connect()
 
     def execute(self, query: Executable) -> CursorResult:
         """Execute the sqlalchemy query and return the cursor result."""
