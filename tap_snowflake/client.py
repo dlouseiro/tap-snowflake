@@ -6,6 +6,8 @@ This includes SnowflakeStream and SnowflakeConnector.
 from __future__ import annotations
 
 import datetime
+import sys
+import contextlib
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import cached_property
@@ -158,6 +160,20 @@ class SnowflakeConnector(SQLConnector):
 
         return URL(**params)
 
+    @contextlib.contextmanager
+    def _redirect_stdout_to_stderr(self):
+        """Temporarily redirect stdout to stderr.
+        
+        This is used to prevent snowflake-connector-python's browser authentication
+        messages from polluting stdout, which must only contain Singer messages.
+        """
+        old_stdout = sys.stdout
+        sys.stdout = sys.stderr
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+
     def create_engine(self) -> sqlalchemy.engine.Engine:
         """Create SQLAlchemy engine instance.
 
@@ -173,12 +189,22 @@ class SnowflakeConnector(SQLConnector):
         ):
             connect_args["private_key"] = self.get_private_key()
 
-        return sqlalchemy.create_engine(
+        engine = sqlalchemy.create_engine(
             self.sqlalchemy_url,
             echo=False,
             pool_timeout=10,
             connect_args=connect_args,
         )
+
+        if self.auth_method == SnowflakeAuthMethod.BROWSER:
+            # Patch the connect method to redirect stdout during browser auth
+            original_connect = engine.connect
+            def wrapped_connect(*args, **kwargs):
+                with self._redirect_stdout_to_stderr():
+                    return original_connect(*args, **kwargs)
+            engine.connect = wrapped_connect
+
+        return engine
 
     # overridden to filter out the information_schema from catalog discovery
     def discover_catalog_entries(self) -> list[dict]:
@@ -189,7 +215,7 @@ class SnowflakeConnector(SQLConnector):
         """
         result: list[dict] = []
         tables = [t.lower() for t in self.config.get("tables", [])]
-        engine = self.create_sqlalchemy_engine()
+        engine = self.create_engine()
         inspected = sqlalchemy.inspect(engine)
         schema_names = [
             self._dialect.identifier_preparer.quote(schema_name)
@@ -296,21 +322,6 @@ class SnowflakeConnector(SQLConnector):
                 for col in profile_columns
             },
         )
-
-    def _connect(self) -> Connection:
-        """Override parent method to redirect stdout to stderr during connection.
-        
-        This is needed because Snowflake outputs browser auth messages to stdout
-        during connection establishment.
-        
-        Returns:
-            A SQLAlchemy connection.
-        """
-        import contextlib
-        import sys
-        
-        with contextlib.redirect_stdout(sys.stderr):
-            return super()._connect()
 
     def execute(self, query: Executable) -> CursorResult:
         """Execute the sqlalchemy query and return the cursor result."""
